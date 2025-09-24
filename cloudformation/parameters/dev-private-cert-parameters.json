@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "eb-auth-demo"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "ElasticBeanstalkEnvironmentName",
+    "ParameterValue": "eb-auth-demo-dev-env"
+  },
+  {
+    "ParameterKey": "CertificateArn",
+    "ParameterValue": "arn:aws:acm:us-east-1:142980311878:certificate/12834a45-87eb-478e-9827-4ac2e060b6bd"
+  },
+  {
+    "ParameterKey": "UsePrivateCertificate",
+    "ParameterValue": "true"
+  }
+]

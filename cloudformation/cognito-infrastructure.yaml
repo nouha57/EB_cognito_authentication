@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Cognito User Pool and App Client for ElasticBeanstalk Authentication'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Name of the project (used for resource naming)
+    Default: eb-auth-demo
+  
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  
+  CallbackURLs:
+    Type: CommaDelimitedList
+    Description: Callback URLs for Cognito App Client
+    Default: "https://example.com/callback"
+  
+  LogoutURLs:
+    Type: CommaDelimitedList
+    Description: Logout URLs for Cognito App Client
+    Default: "https://example.com/logout"
+
+Resources:
+  # Cognito User Pool
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${ProjectName}-${Environment}-user-pool"
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+      UserPoolTags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+
+  # Cognito User Pool Domain
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "${ProjectName}-${Environment}-${AWS::AccountId}"
+      UserPoolId: !Ref CognitoUserPool
+
+  # Cognito User Pool Client
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${ProjectName}-${Environment}-app-client"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: true
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs: !Ref CallbackURLs
+      LogoutURLs: !Ref LogoutURLs
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+Outputs:
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-UserPoolId"
+  
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-UserPoolClientId"
+  
+  UserPoolDomain:
+    Description: Cognito User Pool Domain
+    Value: !Sub "${CognitoUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-UserPoolDomain"
+  
+  UserPoolArn:
+    Description: Cognito User Pool ARN
+    Value: !GetAtt CognitoUserPool.Arn
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-UserPoolArn"

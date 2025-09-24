@@ -1,0 +1,18 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "eb-auth-demo"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "CallbackURLs",
+    "ParameterValue": "https://nouhaz.amazon.com/callback,http://localhost:3000/callback"
+  },
+  {
+    "ParameterKey": "LogoutURLs",
+    "ParameterValue": "https://nouhaz.amazon.com/logout,http://localhost:3000/logout"
+  }
+]

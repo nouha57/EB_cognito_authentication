@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ALB with Cognito Authentication for ElasticBeanstalk"
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Name of the project (used for resource naming)
+    Default: eb-auth-demo
+
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where ALB will be deployed
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnet IDs for ALB (minimum 2 in different AZs)
+
+  ElasticBeanstalkEnvironmentName:
+    Type: String
+    Description: ElasticBeanstalk environment name
+    Default: eb-auth-demo-env
+
+  CertificateArn:
+    Type: String
+    Description: ARN of the SSL certificate (ACM certificate ARN for private or public certificates)
+    Default: ""
+
+  UsePrivateCertificate:
+    Type: String
+    Description: Whether to use a private certificate (true) or request a new ACM certificate (false)
+    Default: "false"
+    AllowedValues: ["true", "false"]
+
+Conditions:
+  UsePrivateCert: !Equals [!Ref UsePrivateCertificate, "true"]
+  CreateNewCert: !Not [!Condition UsePrivateCert]
+
+Resources:
+  # Security Group for ALB
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectName}-${Environment}-alb-sg"
+      GroupDescription: Security group for ALB with Cognito authentication
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP access
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS access
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-alb-sg"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-alb"
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: !Ref SubnetIds
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-alb"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Target Group for ElasticBeanstalk
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-tg"
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-tg"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # HTTPS Listener with Cognito Authentication
+  ALBListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn:
+            !If [UsePrivateCert, !Ref CertificateArn, !Ref SSLCertificate]
+      DefaultActions:
+        - Type: authenticate-cognito
+          AuthenticateCognitoConfig:
+            UserPoolArn:
+              Fn::ImportValue: !Sub "${ProjectName}-${Environment}-UserPoolArn"
+            UserPoolClientId:
+              Fn::ImportValue: !Sub "${ProjectName}-${Environment}-UserPoolClientId"
+            UserPoolDomain:
+              Fn::ImportValue: !Sub "${ProjectName}-${Environment}-UserPoolDomain"
+            Scope: "openid email profile"
+            SessionCookieName: "AWSELBAuthSessionCookie"
+            SessionTimeout: 86400
+          Order: 1
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+          Order: 2
+
+  # HTTP Listener (redirect to HTTPS)
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: 443
+            StatusCode: HTTP_301
+
+  # SSL Certificate - conditionally created or use existing ARN
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: CreateNewCert
+    Properties:
+      DomainName: !Sub "${ProjectName}-${Environment}.example.com"
+      ValidationMethod: DNS
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-cert"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  LoadBalancerArn:
+    Description: ALB ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-ALB-Arn"
+
+  LoadBalancerDNSName:
+    Description: ALB DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-ALB-DNSName"
+
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-TargetGroup-Arn"
+
+  SecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-ALB-SecurityGroup"

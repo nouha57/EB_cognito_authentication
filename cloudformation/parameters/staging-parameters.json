@@ -1,0 +1,18 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "eb-auth-demo"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "staging"
+  },
+  {
+    "ParameterKey": "CallbackURLs",
+    "ParameterValue": "https://eb-auth-demo-staging.example.com/callback"
+  },
+  {
+    "ParameterKey": "LogoutURLs",
+    "ParameterValue": "https://eb-auth-demo-staging.example.com/logout"
+  }
+]
