@@ -8,7 +8,7 @@ set -e
 # Configuration
 PROJECT_NAME="eb-auth-demo"
 ENVIRONMENT="dev"
-DOMAIN_NAME="nouhaz.amazon.com"
+DOMAIN_NAME="******"
 CERT_DIR="certificates"
 
 # Colors for output
